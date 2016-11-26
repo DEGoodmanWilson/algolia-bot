@@ -99,12 +99,15 @@ class Events
 
   # A new user joins the team
   def self.channel_join(team_id, event_data)
+
+    token = $tokens.find({team_id: team_id}).first
+
     # decide if this user is _us_. If not, ignore it.
     user_id = event_data['user']
-    return unless user_id == $teams[team_id][:bot_user_id]
+    return unless user_id == token['bot_user_id']
 
     index = Algolia::Index.new(team_id)
-    user_client = create_slack_client($teams[team_id][:user_access_token])
+    user_client = create_slack_client(token['user_access_token'])
 
     # we've joined this channel! Let's index it!
     # TODO we should check history[:has_more] to see if we should go further back in time
@@ -115,7 +118,9 @@ class Events
     history_array = Array.new
 
     history[:messages].each do |message|
-      unless message[:user] == $teams[team_id][:bot_user_id] #don't index messages from us!
+      match = Regexp.new('<@'+token['bot_user_id']+'>:? (.*)').match message['text']
+
+      if (message[:user] != token['bot_user_id']) && (message[:subtype].nil?) && (match.nil?) #don't index messages from us! Don't index subtyped messages! Don't index queries made to us!
         message[:objectID] = event_data['channel']+'.'+message[:ts]
         message[:channel] = event_data['channel']
         history_array.push(message)
@@ -126,20 +131,23 @@ class Events
   end
 
   def self.message(team_id, event_data)
+
+    token = $tokens.find({team_id: team_id}).first
     user_id = event_data['user']
 
+
     # Don't process messages sent from our bot user
-    return if user_id == $teams[team_id][:bot_user_id]
+    return if user_id == token['bot_user_id']
 
     index = Algolia::Index.new(team_id)
     # TODO would be nice not to have to set the settings every time
     index.set_settings('searchableAttributes' => ['text','attachments.text'], 'customRanking' => ['desc(ts)'])
 
-    client = create_slack_client($teams[team_id][:bot_access_token])
+    client = create_slack_client(token['bot_access_token'])
 
     # If this _is_ a message to us, don't index it, but act upon it
 
-    match = Regexp.new('<@'+$teams[team_id][:bot_user_id]+'> (.*)').match event_data['text']
+    match = Regexp.new('<@'+token['bot_user_id']+'>:? (.*)').match event_data['text']
     unless match.nil?
       res = index.search(match[1], {'attributesToRetrieve' => ['channel','ts','user','text'], 'hitsPerPage' => 5})
 

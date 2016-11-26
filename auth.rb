@@ -1,5 +1,9 @@
 require 'sinatra/base'
 require 'slack-ruby-client'
+require 'mongo'
+
+db_client = Mongo::Client.new(ENV['MONGODB_URI'])
+$tokens = db_client[:token]
 
 # Load Slack app info into a hash called `config` from the environment variables assigned during setup
 # See the "Running the app" section of the README for instructions.
@@ -20,11 +24,6 @@ end
 # Set the OAuth scope of your bot. We're just using `bot` for this demo, as it has access to
 # all the things we'll need to access. See: https://api.slack.com/docs/oauth-scopes for more info.
 BOT_SCOPE = 'bot,channels:history'
-
-# This hash will contain all the info for each authed team, as well as each team's Slack client object.
-# In a production environment, you may want to move some of this into a real data store.
-$teams = {}
-
 
 # Slack uses OAuth for user authentication. This auth process is performed by exchanging a set of
 # keys and tokens between Slack's servers and yours. This process allows the authorizing user to confirm
@@ -69,15 +68,19 @@ class Auth < Sinatra::Base
       # Yay! Auth succeeded! Let's store the tokens and create a Slack client to use in our Events handlers.
       # The tokens we receive are used for accessing the Web API, but this process also creates the Team's bot user and
       # authorizes the app to access the Team's Events.
+
+      # TODO this doesn't account for multiple installations; the problem is we always overrite the bearer token
+      # with the token for the latest installer. This is no good. We should be more discerning!
+      # For now this will do.
       team_id = response['team_id']
-      $teams[team_id] = {
+      doc = {
+        team_id: team_id,
         user_access_token: response['access_token'],
         bot_user_id: response['bot']['bot_user_id'],
         bot_access_token: response['bot']['bot_access_token']
       }
+      $tokens.insert_one(doc)
 
-      $teams[team_id]['client'] = create_slack_client(response['bot']['bot_access_token'])
-      $teams[team_id]['bearer_client'] = create_slack_client(response['access_token'])
       # Be sure to let the user know that auth succeeded.
       status 200
       body "Yay! Auth succeeded! You're awesome!"
