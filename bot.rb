@@ -110,24 +110,33 @@ class Events
     user_client = create_slack_client(token['user_access_token'])
 
     # we've joined this channel! Let's index it!
-    # TODO we should check history[:has_more] to see if we should go further back in time
-    history = user_client.channels_history(channel: event_data['channel'])
+    has_more = true
+    limit = 5 # TODO I'd like to up this limit, but we have a 3 second window. We should move this into an async task so we can ingest more!
+    while has_more && (limit > 0)
 
-    # messages is a JSON array of messages that we can feed more or less directly to Algolia!
-    # TODO problem: Algolia doesn't like Hashie::array. We have to make this a regular Ruby Array.
-    history_array = Array.new
+      history = user_client.channels_history(channel: event_data['channel'])
 
-    history[:messages].each do |message|
-      match = Regexp.new('<@'+token['bot_user_id']+'>:? (.*)').match message['text']
 
-      if (message[:user] != token['bot_user_id']) && (message[:subtype].nil?) && (match.nil?) #don't index messages from us! Don't index subtyped messages! Don't index queries made to us!
-        message[:objectID] = event_data['channel']+'.'+message[:ts]
-        message[:channel] = event_data['channel']
-        history_array.push(message)
+      # messages is a JSON array of messages that we can feed more or less directly to Algolia!
+      # TODO problem: Algolia doesn't like Hashie::array. We have to make this a regular Ruby Array.
+      history_array = Array.new
+
+      history[:messages].each do |message|
+        match = Regexp.new('<@'+token['bot_user_id']+'>:? (.*)').match message['text']
+
+        if (message[:user] != token['bot_user_id']) && (message[:subtype].nil?) && (match.nil?) #don't index messages from us! Don't index subtyped messages! Don't index queries made to us!
+          message[:objectID] = event_data['channel']+'.'+message[:ts]
+          message[:channel] = event_data['channel']
+          history_array.push(message)
+        end
       end
+
+      index.add_objects(history_array)
+
+      has_more = history['has_more']
+      limit = limit - 1
     end
 
-    index.add_objects(history_array)
   end
 
   def self.message(team_id, event_data)
@@ -141,7 +150,7 @@ class Events
 
     index = Algolia::Index.new(team_id)
     # TODO would be nice not to have to set the settings every time
-    index.set_settings('searchableAttributes' => ['text','attachments.text'], 'customRanking' => ['desc(ts)'])
+    index.set_settings('searchableAttributes' => ['text', 'attachments.text'], 'customRanking' => ['desc(ts)'])
 
     client = create_slack_client(token['bot_access_token'])
 
@@ -149,7 +158,7 @@ class Events
 
     match = Regexp.new('<@'+token['bot_user_id']+'>:? (.*)').match event_data['text']
     unless match.nil?
-      res = index.search(match[1], {'attributesToRetrieve' => ['channel','ts','user','text'], 'hitsPerPage' => 5})
+      res = index.search(match[1], {'attributesToRetrieve' => ['channel', 'ts', 'user', 'text'], 'hitsPerPage' => 5})
 
       # Now, let's set up a response that looks like this:
       # https://api.slack.com/docs/messages/builder?msg=%7B%22text%22%3A%22Here%20are%20some%20results%20I%20found%22%2C%22unfurl_links%22%3Afalse%2C%22unfurl_media%22%3Afalse%2C%22attachments%22%3A%5B%7B%22color%22%3A%22%2336a64f%22%2C%22author_name%22%3A%22Don%20Goodman-Wilson%22%2C%22title%22%3A%22General%22%2C%22title_link%22%3A%22http%3A%2F%2Farchive%20link%22%2C%22text%22%3A%22Here%20is%20the%20original%20text%20discovered%22%2C%22ts%22%3A123456789%7D%2C%7B%22text%22%3A%22%22%2C%22footer%22%3A%22Powered%20by%20Algolia%22%2C%22footer_icon%22%3A%22https%3A%2F%2Fwww.algolia.com%2Fstatic_assets%2Fimages%2Fpress%2Fdownloads%2Falgolia-mark-blue.png%22%2C%22ts%22%3A123456789%7D%5D%7D
