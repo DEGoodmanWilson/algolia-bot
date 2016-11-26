@@ -13,37 +13,6 @@ def create_slack_client(slack_api_secret)
   Slack::Web::Client.new
 end
 
-# This class contains all of the logic for loading, cloning and updating the tutorial message attachments.
-class SlackTutorial
-  # Store the welcome text for use when sending and updating the tutorial messages
-  def self.welcome_text
-    "Welcome to Slack! We're so glad you're here.\nGet started by inviting me into a channel to index. I only index public channels."
-  end
-
-
-  # Store the index of each tutorial section in TUTORIAL_JSON for easy reference later
-  def self.items
-    {reaction: 0, pin: 1, share: 2}
-  end
-
-  # Return a new copy of tutorial_json so each user has their own instance
-  def self.new
-    self.tutorial_json.deep_dup
-  end
-
-  # This is a helper function to update the state of tutorial items
-  # in the hash shown above. When the user completes an action on the
-  # tutorial, the item's icon will be set to a green checkmark and
-  # the item's border color will be set to blue
-  def self.update_item(team_id, user_id, item_index)
-    # Update the tutorial section by replacing the empty checkbox with the green
-    # checkbox and updating the section's color to show that it's completed.
-    tutorial_item = $teams[team_id][user_id][:tutorial_content][item_index]
-    tutorial_item[:text].sub!(':white_large_square:', ':white_check_mark:')
-    tutorial_item[:color] = '#439FE0'
-  end
-end
-
 # This class contains all of the webserver logic for processing incoming requests from Slack.
 class API < Sinatra::Base
   # This is the endpoint Slack will post Event data to.
