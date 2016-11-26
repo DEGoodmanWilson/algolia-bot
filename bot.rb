@@ -192,7 +192,7 @@ class Events
           result[:color] = '#005500' # would be cool to color this based on result quality
           result[:author_name] = user[:user][:real_name]
           result[:title] = '#' + channel[:channel][:name]
-          result[:title_link] = "#{team_url}archives/#{channel[:channel][:id]}/p#{hit['ts'].sub('.', '')}"
+          result[:title_link] = "#{team_url}archives/#{channel[:channel][:name]}/p#{hit['ts'].sub('.', '')}"
           result[:text] = hit['text']
           result[:ts] = hit['ts'].split('.')[0]
           attachments.push(result)
