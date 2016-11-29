@@ -23,6 +23,8 @@ end
 
 # Set the OAuth scope of your bot. We're just using `bot` for this demo, as it has access to
 # all the things we'll need to access. See: https://api.slack.com/docs/oauth-scopes for more info.
+# In fact, we're going to add `channels:history` so we can preload some of the Algolia index! Normally
+# this is anything but a best-practice, but it helps for this demo.
 BOT_SCOPE = 'bot,channels:history'
 
 # Slack uses OAuth for user authentication. This auth process is performed by exchanging a set of
@@ -69,9 +71,11 @@ class Auth < Sinatra::Base
       # The tokens we receive are used for accessing the Web API, but this process also creates the Team's bot user and
       # authorizes the app to access the Team's Events.
 
-      # TODO this doesn't account for multiple installations; the problem is we always overrite the bearer token
-      # with the token for the latest installer. This is no good. We should be more discerning!
-      # For now this will do.
+      # TODO this doesn't account for multiple installations; the problem is we are always overrite the bearer token
+      # with the token for the latest installer. This is no good. We should be more discerning! Most bots won't care
+      # about this fact in the least, but since we are adding `channels:history` to our scope, we need to care about
+      # the bearer tokens.
+      # For now, however, this will do.
       team_id = response['team_id']
       doc = {
         team_id: team_id,
